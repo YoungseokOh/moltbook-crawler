@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Database and Logs
+data/
+logs/
+*.db
+*.log
+
+# Research and temporary files
+research/dumps/
+*.html
+*.png
+*.webp
+.DS_Store
+
+# Environment
+.env
+.venv
+venv/
+ENV/

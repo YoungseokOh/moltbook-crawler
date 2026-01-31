@@ -1,58 +1,64 @@
 # Moltbook Crawler 🦞🤖
 
-A Selenium-based crawler for [Moltbook](https://www.moltbook.com), a social network built exclusively for AI agents.
+A high-performance parallel crawler for [Moltbook](https://www.moltbook.com), a social network built exclusively for AI agents.
 
 ## Features
-- **Full & Incremental Crawling**: Performs a complete data scrape on first run and efficiently updates with only new data in subsequent runs.
-- **SQLite Persistence**: Stores posts, comments, and agent info in a structured relational database (`data/moltbook.db`).
-- **Detection Evasion**: Uses headless mode and various evasion techniques to crawl reliably without being flagged as a bot.
-- **Modular Architecture**: Designed for easy maintenance and scalability.
-- **Data Dashboard**: (Coming Soon) A modern web interface to view and analyze the crawled data.
+- **🚀 Streaming Parallel Architecture**: Uses a Producer-Consumer pattern to collect links and crawl posts simultaneously in real-time.
+- **⚡️ High Speed**: Crawls approximately **8 posts/minute** using 4 concurrent browser instances (vs ~2 posts/min sequentially).
+- **🔄 Incremental Updates**: Automatically skips posts already in the database for efficient daily updates.
+- **🛡️ Robust & Reliable**: Handles network timeouts, stale elements, and database concurrency (WAL mode supported).
+- **💾 Structured Data**: Stores everything (posts, comments, agents) in a relational SQLite database.
 
 ## Project Structure
 ```
 hack-the-moltbook/
 ├── moltbook/           # Core package (Crawler, DB, Models, Config)
-├── research/           # Development research scripts and HTML dumps
-├── sql/                # Database schema definitions
+├── parallel_crawler.py # Main entry point for streaming parallel crawler
+├── main.py             # Legacy sequential crawler
+├── sql/                # Database schema
 ├── logs/               # Execution logs
-├── data/               # SQLite database storage
-├── dashboard/          # (New) Web dashboard for data visualization
-├── main.py             # CLI entry point
-└── requirements.txt    # Python dependencies
+├── data/               # SQLite database (moltbook.db)
+├── dashboard/          # Data visualization dashboard
+└── requirements.txt    # Dependencies
 ```
 
 ## Getting Started
 
 ### 1. Prerequisites
-Python 3.8+ is required.
+Python 3.8+ and Chrome browser are required.
 ```bash
 pip install -r requirements.txt
 ```
-*Ensure Chrome browser and ChromeDriver are installed on your system.*
 
 ### 2. Usage
 
-**Initial Full Crawl**
+**🚀 Start Parallel Crawl (Recommended)**
+This will start 4 workers by default and stream data into the DB.
 ```bash
-python3 main.py
+python3 parallel_crawler.py
 ```
 
-**Incremental Update (New data only)**
+**Options:**
+- `--workers N`: Number of browser instances (default: 4)
+- `--limit N`: Limit number of *new* posts to crawl
+- `--no-headless`: See the browsers in action (debug mode)
+
+**Example: Fast Update**
+Crawl only the latest 50 new posts with 6 workers.
 ```bash
-python3 main.py --incremental
+python3 parallel_crawler.py --limit 50 --workers 6
 ```
 
-**Test Run (Limit to 5 posts)**
+## Data Analysis
+Data is stored in `data/moltbook.db`. You can query it using `sqlite3`:
+
 ```bash
-python3 main.py --limit 5
+# Check stats
+sqlite3 data/moltbook.db "SELECT COUNT(*) FROM posts;"
+
+# Find interesting posts
+sqlite3 data/moltbook.db "SELECT title, comment_count FROM posts ORDER BY comment_count DESC LIMIT 5;"
 ```
 
-**Debug Mode (Visible browser)**
-```bash
-python3 main.py --no-headless -v
-```
-
-## Data Management
-- Collected data is stored in `data/moltbook.db`.
-- For continuous updates, it is recommended to schedule `main.py --incremental` using `cron`.
+## License
+MIT

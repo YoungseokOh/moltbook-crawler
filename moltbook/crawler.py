@@ -3,7 +3,7 @@ import time
 import random
 import re
 import logging
-from typing import List, Optional, Tuple
+from typing import List, Optional, Generator, Set
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -72,53 +72,126 @@ class MoltbookCrawler:
             time.sleep(2)
         
         return False
+
+    def _extract_post_id(self, url: str) -> str:
+        """Extract post ID from a URL."""
+        return url.split("/post/")[-1].split("?")[0]
     
-    def get_post_links_from_feed(self, max_posts: Optional[int] = None) -> List[str]:
-        """Extract post links from the main feed."""
-        logger.info("Loading main feed...")
+    def _collect_visible_hrefs(self) -> List[str]:
+        """Collect all post hrefs currently visible on page as strings."""
+        hrefs = []
+        try:
+            links = self.driver.find_elements(By.CSS_SELECTOR, "a[href^='/post/']")
+            for link in links:
+                try:
+                    href = link.get_attribute("href")
+                    if href:
+                        hrefs.append(href)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return hrefs
+    
+    def stream_post_links(
+        self, 
+        known_ids: Optional[Set[str]] = None,
+        max_posts: Optional[int] = None,
+        batch_size: int = 10
+    ) -> Generator[List[str], None, None]:
+        """
+        Stream post links from the main feed as they're discovered.
+        
+        Yields batches of NEW post URLs (not in known_ids) immediately as found,
+        rather than waiting to collect all links first.
+        
+        Args:
+            known_ids: Set of post IDs already in DB (will be skipped)
+            max_posts: Maximum number of NEW posts to yield (None = unlimited)
+            batch_size: Number of new links to collect before yielding a batch
+        
+        Yields:
+            List of post URLs (batch_size new links at a time)
+        """
+        if known_ids is None:
+            known_ids = set()
+        
+        logger.info("Loading main feed (streaming mode)...")
         self.driver.get(config.BASE_URL)
         self._wait_for_content()
         
-        post_links = set()
+        seen_urls = set()  # All URLs seen in this session
+        total_new_yielded = 0
+        pending_batch = []
         scroll_attempts = 0
-        max_scroll_attempts = 50 if max_posts is None else (max_posts // 10) + 5
+        max_scroll_attempts = 10  # Stop after 10 consecutive no-new-content scrolls
+        last_scroll_position = 0
         
         while scroll_attempts < max_scroll_attempts:
-            # Find all post links
-            links = self.driver.find_elements(By.CSS_SELECTOR, "a[href^='/post/']")
-            for link in links:
-                href = link.get_attribute("href")
-                if href:
-                    post_links.add(href)
+            # Collect all hrefs as strings (avoids stale element issues)
+            current_hrefs = self._collect_visible_hrefs()
             
-            logger.info(f"Found {len(post_links)} post links so far...")
-            
-            if max_posts and len(post_links) >= max_posts:
-                break
+            for href in current_hrefs:
+                if href in seen_urls:
+                    continue
+                    
+                seen_urls.add(href)
+                post_id = self._extract_post_id(href)
+                
+                # Skip if already in DB
+                if post_id in known_ids:
+                    logger.debug(f"Skipping known post: {post_id}")
+                    continue
+                
+                pending_batch.append(href)
+                
+                # Yield batch when full
+                if len(pending_batch) >= batch_size:
+                    logger.info(f"Yielding batch of {len(pending_batch)} new posts (total discovered: {len(seen_urls)}, DB: {len(known_ids)})")
+                    yield pending_batch
+                    total_new_yielded += len(pending_batch)
+                    pending_batch = []
+                    
+                    # Check max_posts limit
+                    if max_posts and total_new_yielded >= max_posts:
+                        logger.info(f"Reached max_posts limit ({max_posts})")
+                        return
+                    
+                    # Reload feed page and restore scroll position after batch processing
+                    logger.debug("Reloading feed after batch...")
+                    self.driver.get(config.BASE_URL)
+                    self._wait_for_content()
+                    # Scroll back to approximate position
+                    self.driver.execute_script(f"window.scrollTo(0, {last_scroll_position});")
+                    time.sleep(1)
             
             # Scroll down to load more
-            last_height = self.driver.execute_script("return document.body.scrollHeight")
+            last_scroll_position = self.driver.execute_script("return document.body.scrollHeight")
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)
             
             new_height = self.driver.execute_script("return document.body.scrollHeight")
-            if new_height == last_height:
+            if new_height == last_scroll_position:
                 # Try clicking "Load More" button if exists
                 try:
                     load_more = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Load') or contains(text(), 'More')]")
                     load_more.click()
                     time.sleep(2)
+                    scroll_attempts = 0  # Reset on successful load more
                 except NoSuchElementException:
                     scroll_attempts += 1
+                    logger.debug(f"No new content, scroll attempt {scroll_attempts}/{max_scroll_attempts}")
             else:
                 scroll_attempts = 0  # Reset if we got new content
+            
+            last_scroll_position = new_height
         
-        result = list(post_links)
-        if max_posts:
-            result = result[:max_posts]
+        # Yield remaining posts in the final partial batch
+        if pending_batch:
+            logger.info(f"Yielding final batch of {len(pending_batch)} new posts")
+            yield pending_batch
         
-        logger.info(f"Collected {len(result)} post links")
-        return result
+        logger.info(f"Feed scrolling complete. Total discovered: {len(seen_urls)}, New posts yielded: {total_new_yielded + len(pending_batch)}")
     
     def parse_post(self, url: str) -> Optional[Post]:
         """Navigate to a post and extract its data."""

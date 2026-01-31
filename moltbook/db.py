@@ -126,3 +126,14 @@ def get_comment_count() -> int:
     count = cursor.fetchone()[0]
     conn.close()
     return count
+
+
+def get_all_post_ids() -> set:
+    """Get all post IDs currently in the database."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM posts')
+    ids = {row[0] for row in cursor.fetchall()}
+    conn.close()
+    return ids
+

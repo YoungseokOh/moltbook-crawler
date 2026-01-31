@@ -4,14 +4,14 @@ description: Perform an incremental crawl to collect only new Moltbook posts. Id
 
 # Incremental Crawl Workflow
 
-Crawl only new posts from Moltbook, skipping posts already in the database.
+Crawl only new posts from Moltbook using parallel processing. Already-crawled posts are automatically skipped.
 
 ## Steps
 
-1. Run the incremental crawler:
+1. Run the parallel crawler (auto-skips existing posts):
 // turbo
 ```bash
-python3 main.py --incremental
+python3 parallel_crawler.py --limit 100
 ```
 
 2. Verify new posts were added:
@@ -21,9 +21,11 @@ sqlite3 data/moltbook.db "SELECT title, crawled_at FROM posts ORDER BY crawled_a
 ```
 
 ## Notes
-- Use this workflow for periodic updates (e.g., cron jobs).
-- Combine with `--limit N` to cap the number of new posts per run.
+- Parallel crawler automatically skips posts already in DB
+- Use `--limit N` to cap the number of new posts per run
+- Use `--workers N` to adjust parallelism (default: 4)
 - Example cron entry for hourly updates:
   ```
-  0 * * * * cd /home/seok436/projects/hack-the-moltbook && python3 main.py --incremental >> logs/cron.log 2>&1
+  0 * * * * cd /home/seok436/projects/hack-the-moltbook && python3 parallel_crawler.py --limit 50 >> logs/cron.log 2>&1
   ```
+

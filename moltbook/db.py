@@ -9,8 +9,10 @@ from . import config
 def get_connection() -> sqlite3.Connection:
     """Get a database connection, creating the database if needed."""
     os.makedirs(os.path.dirname(config.DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(config.DB_PATH)
+    conn = sqlite3.connect(config.DB_PATH, timeout=30)  # 30 second timeout for locks
     conn.row_factory = sqlite3.Row
+    # Enable WAL mode for better concurrent access
+    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 

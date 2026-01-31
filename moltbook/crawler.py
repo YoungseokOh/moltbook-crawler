@@ -124,7 +124,7 @@ class MoltbookCrawler:
         total_new_yielded = 0
         pending_batch = []
         scroll_attempts = 0
-        max_scroll_attempts = 10  # Stop after 10 consecutive no-new-content scrolls
+        max_scroll_attempts = 50  # Increased from 10 to 50 for infinite scroll resilience
         last_scroll_position = 0
         
         while scroll_attempts < max_scroll_attempts:
@@ -140,7 +140,7 @@ class MoltbookCrawler:
                 
                 # Skip if already in DB
                 if post_id in known_ids:
-                    logger.debug(f"Skipping known post: {post_id}")
+                    # logger.debug(f"Skipping known post: {post_id}")
                     continue
                 
                 pending_batch.append(href)
@@ -157,13 +157,9 @@ class MoltbookCrawler:
                         logger.info(f"Reached max_posts limit ({max_posts})")
                         return
                     
-                    # Reload feed page and restore scroll position after batch processing
-                    logger.debug("Reloading feed after batch...")
-                    self.driver.get(config.BASE_URL)
-                    self._wait_for_content()
-                    # Scroll back to approximate position
-                    self.driver.execute_script(f"window.scrollTo(0, {last_scroll_position});")
-                    time.sleep(1)
+                    # NOTE: Removed page reload logic here because it resets scroll state 
+                    # and causes the crawler to think there are no more posts.
+                    # Modern browsers can handle thousands of DOM elements reasonably well.
             
             # Scroll down to load more
             last_scroll_position = self.driver.execute_script("return document.body.scrollHeight")

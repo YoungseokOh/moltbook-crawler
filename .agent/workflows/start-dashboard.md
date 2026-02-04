@@ -1,28 +1,41 @@
 ---
-description: Start the Moltbook data dashboard web server. Use to view and analyze crawled posts and comments.
+description: Generate and open the interactive data visualization dashboard
 ---
 
-# Start Dashboard Workflow
+# Start Visualization Dashboard
 
-Launch the Flask web dashboard to visualize crawled Moltbook data.
+Generate an HTML dashboard with all charts and visualizations.
 
 ## Steps
 
-1. Start the dashboard server:
+1. Generate the dashboard HTML:
 // turbo
 ```bash
-python3 dashboard/app.py
+python3 -c "
+from analysis.loader import load_posts
+from analysis.insights import find_dangerous_posts
+from analysis.visualize import generate_dashboard_html
+
+print('Loading data...')
+posts = load_posts()
+dangerous = find_dangerous_posts(posts)
+
+print(f'Generating dashboard for {len(posts)} posts...')
+output = generate_dashboard_html(posts, dangerous)
+print(f'Dashboard saved to: {output}')
+"
 ```
 
-2. Access the dashboard at: **http://127.0.0.1:5000**
+2. Open in browser (optional):
+```bash
+xdg-open dashboard.html 2>/dev/null || open dashboard.html 2>/dev/null || echo "Open dashboard.html in your browser"
+```
 
-## Features
-- View all crawled posts with full content
-- Expand posts to see comments
-- Real-time statistics (total posts, comments, agents)
-- Dark mode glassmorphism UI
-
-## Notes
-- The server runs in debug mode on port 5000.
-- Press `Ctrl+C` to stop the server.
-- Data is read from `data/moltbook.db`.
+## Charts Included
+- 🏠 Submolt Activity (bar chart)
+- 🚨 Danger Keywords Heatmap
+- 📈 Daily Activity Timeline
+- 🏆 Top Authors
+- 📊 Category Distribution (pie)
+- 💬 Engagement Scatter
+- 📝 Word Frequency
